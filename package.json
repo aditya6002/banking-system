@@ -1,0 +1,25 @@
+{
+  "name": "banking-system",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/aditya6002/banking-system#readme",
+  "bugs": {
+    "url": "https://github.com/aditya6002/banking-system/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aditya6002/banking-system.git"
+  },
+  "license": "ISC",
+  "author": "Aditya Prakash",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev":"nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
