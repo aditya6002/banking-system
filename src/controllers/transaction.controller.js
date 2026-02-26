@@ -1,9 +1,10 @@
-const express = require("express");
-const router = express.Router();
 const AppError = require("../utils/AppError");
 
 const accountModel = require("../models/account.model");
 const transactionModel = require("../models/transaction.model");
+const ledgerModel = require("../models/ledger.model");
+
+const mongoose = require("mongoose");
 
 /**
  * - Create a new transaction
@@ -22,7 +23,7 @@ const transactionModel = require("../models/transaction.model");
 
 async function createTransaction(req, res) {
   /**
-   * - Validate request
+   * - 1. Validate request
    */
   const { fromAccount, toAccount, amount, idempotencyKey } = req.body;
 
@@ -41,7 +42,7 @@ async function createTransaction(req, res) {
   }
 
   /**
-   * - Validate idempotency key
+   * - 2. Validate idempotency key
    */
   const existingTransaction = await transactionModel.findOne({
     idempotencyKey,
@@ -72,7 +73,7 @@ async function createTransaction(req, res) {
   }
 
   /**
-   * - Check account status
+   * - 3. Check account status
    */
   if (
     fromUserAccount.status !== "ACTIVE" ||
@@ -85,14 +86,77 @@ async function createTransaction(req, res) {
   }
 
   /**
-   * - Derive sender balance for ledger
+   * - 4. Derive sender balance for ledger
    */
-  if (fromUserAccount.balance < amount) {
-    throw new AppError("Insufficient balance in fromAccount", 400);
+  const balance = await fromUserAccount.getBalance();
+  if (balance < amount) {
+    throw new AppError(
+      `Insufficient balance. Current balance is ${balance}. Requested balance is ${amount}`,
+      400,
+    );
   }
 
+  /**
+   * - 5. Create transaction(PENDING)
+   */
 
-  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  const transaction = await transactionModel.create(
+    {
+      fromAccount,
+      toAccount,
+      idempotencyKey,
+      amount,
+      status: "PENDING",
+    },
+    { session },
+  );
+
+  /**
+   * - 6. Create DEBIT ledger entry
+   */
+  const debitLedgerEntry = await ledgerModel.create(
+    {
+      account: fromAccount,
+      amount,
+      transaction: transaction._id,
+      type: "DEBIT",
+    },
+    { session },
+  );
+
+  /**
+   * - 7. Create CREDIT ledger entry
+   */
+  const creditLedgerEntry = await ledgerModel.create(
+    {
+      account: toAccount,
+      amount,
+      transaction: transaction._id,
+      type: "CREDIT",
+    },
+    { session },
+  );
+
+  /**
+   * - 8. Mark transaction COMPLETED
+   */
+  transaction.status = "COMPLETED";
+  await transaction.save({ session });
+
+  /**
+   * 9. Commit MongoDB seccion
+   */
+  await session.commitTransaction();
+  session.endSession();
+
+  /**
+   * 10. Send Email notification
+   */
 }
 
-module.exports = router;
+module.exports = {
+  createTransaction,
+};

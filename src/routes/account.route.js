@@ -7,6 +7,7 @@ const authController = require("../controllers/account.controller");
  * - POST /api/accounts
  * - Create a new account
  * - Protected Route
+ * - Body: { currency }
  */
 router.post(
   "/",
