@@ -4,7 +4,7 @@ const ledgerSchema = new mongoose.Schema({
   account: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
-    required: [true, "Ledger must be associated with an accoun"],
+    required: [true, "Ledger must be associated with an account"],
     index: true,
     immutable: true,
   },

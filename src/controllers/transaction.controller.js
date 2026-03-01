@@ -17,7 +17,7 @@ const mongoose = require("mongoose");
  * 6. Create DEBIT ledger entry
  * 7. Create CREDIT ledger entry
  * 8. Mark transaction COMPLETED
- * 9. Commit MongoDB seccion
+ * 9. Commit MongoDB session
  * 10. Send Email notification
  */
 
@@ -117,7 +117,7 @@ async function createTransaction(req, res) {
   /**
    * - 6. Create DEBIT ledger entry
    */
-  const debitLedgerEntry = await ledgerModel.create(
+  await ledgerModel.create(
     {
       account: fromAccount,
       amount,
@@ -130,7 +130,7 @@ async function createTransaction(req, res) {
   /**
    * - 7. Create CREDIT ledger entry
    */
-  const creditLedgerEntry = await ledgerModel.create(
+  await ledgerModel.create(
     {
       account: toAccount,
       amount,
@@ -147,7 +147,7 @@ async function createTransaction(req, res) {
   await transaction.save({ session });
 
   /**
-   * 9. Commit MongoDB seccion
+   * 9. Commit MongoDB session
    */
   await session.commitTransaction();
   session.endSession();
@@ -155,8 +155,96 @@ async function createTransaction(req, res) {
   /**
    * 10. Send Email notification
    */
+
+  res.status(201).json({
+    message: "Transaction completed successfully",
+    transaction,
+  });
+}
+
+/**
+ * - Create initial funds transaction from SYSTEM account to a user account
+ * The 5-STEP INITIAL TRANSFER FLOW:
+ * 1. Validate request
+ * 2. Validate idempotency key
+ * 3. Create transaction(PENDING)
+ * 4. Create CREDIT ledger entry
+ * 5. Mark transaction COMPLETED
+ */
+async function createInitialTransaction(req, res) {
+  const { toAccount, amount, idempotencyKey } = req.body;
+
+  if (!toAccount || !amount || !idempotencyKey) {
+    throw new AppError(
+      "toAccount, amount and idempotencyKey are required ",
+      400,
+    );
+  }
+
+  console.log(toAccount);
+  const toUserAccount = await accountModel.findOne({ _id: toAccount });
+  console.log(toUserAccount);
+  if (!toUserAccount) {
+    throw new AppError("Invalid toAccount", 400);
+  }
+
+  const fromUserAccount = await accountModel.findOne({
+    systemUser: true,
+    userId: req.user._id,
+  });
+
+  if (!fromUserAccount) {
+    throw new AppError("System account not found", 500);
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  const transaction = new transactionModel({
+    toAccount,
+    fromAccount: fromUserAccount._id,
+    amount: amount,
+    idempotencyKey,
+    status: "PENDING",
+  });
+
+  const debitLedgerEntry = await ledgerModel.create(
+    [
+      {
+        account: fromUserAccount._id,
+        amount: amount,
+        transaction: transaction._id,
+        type: "DEBIT",
+      },
+    ],
+    { session },
+  );
+
+  const creditLedgerEntry = await ledgerModel.create(
+    [
+      {
+        account: toAccount,
+        amount: amount,
+        transaction: transaction._id,
+        type: "CREDIT",
+      },
+    ],
+    { session },
+  );
+
+  transaction.status = "COMPLETED";
+  await transaction.save({ session });
+
+  await session.commitTransaction();
+  session.endSession();
+
+  res.status(201).json({
+    message: "Initial funds transaction completed successfully",
+    transaction: transaction,
+  });
 }
 
 module.exports = {
   createTransaction,
+  createInitialTransaction,
 };
