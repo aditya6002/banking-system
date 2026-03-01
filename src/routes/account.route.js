@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/auth.middleware");
-const authController = require("../controllers/account.controller");
+const accountController = require("../controllers/account.controller");
 
 /**
  * - POST /api/accounts
@@ -12,7 +12,31 @@ const authController = require("../controllers/account.controller");
 router.post(
   "/",
   authMiddleware.isUserLogin,
-  authController.createAccountController,
+  accountController.createAccountController,
 );
+
+/**
+ * - /api/accounts
+ * - Get all accounts of the logged-in user
+ * - Protected Route
+ */
+router.get(
+  "/",
+  authMiddleware.isUserLogin,
+  accountController.getUserAccountsController,
+);
+
+/**
+ * - GET /api/accounts/balance/:accountId
+ * - Get the balance of a specific account of the logged-in user
+ * - Protected Route
+*/
+router.get(
+  "/balance/:accountId",
+  authMiddleware.isUserLogin,
+  accountController.getUserAccountsBalanceController,
+);  
+
+
 
 module.exports = router;

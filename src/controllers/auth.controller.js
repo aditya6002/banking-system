@@ -1,7 +1,7 @@
 const userModel = require("../models/user.model");
 const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
-
+const blacklistModel = require("../models/blacklist.model");
 /**
  * - user register controller
  * - POST /api/auth/register
@@ -44,8 +44,7 @@ async function userLoginController(req, res) {
   const { email, password } = req.body;
   const user = await userModel.findOne({ email }).select("+password");
 
-  console.log(user)
-  
+  console.log(user);
 
   if (!user) {
     throw new AppError("Email or Password is Invalid", 401);
@@ -72,4 +71,32 @@ async function userLoginController(req, res) {
   });
 }
 
-module.exports = { userRegisterController, userLoginController };
+/**
+ * - user logout controller
+ * - POST /api/auth/logout
+ * - Protected route, requires authentication
+ */
+async function userLogoutController(req, res) {
+  const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
+
+  if (!token) {
+    throw new AppError("User is not logged in", 400);
+  }
+
+  res.clearCookie("token");
+  
+  await blacklistModel.create({
+    token,
+    blacklistAt: new Date(),
+  });
+
+  res.status(200).json({
+    message: "User logged out successfully",
+  });
+}
+
+module.exports = {
+  userRegisterController,
+  userLoginController,
+  userLogoutController,
+};
